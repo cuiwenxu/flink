@@ -227,12 +227,23 @@ public class IntervalJoinOperator<K, T1, T2, OUT>
                             + "interval stream joins need to have timestamps meaningful timestamps.");
         }
 
+        /**
+         * private boolean isLate(long timestamp) {
+         *         long currentWatermark = internalTimerService.currentWatermark();
+         *         return currentWatermark != Long.MIN_VALUE && timestamp < currentWatermark;
+         * }
+         * 比较当前元素和currentWatermark的大小，如果timestamp < currentWatermark，则视为迟到元素，直接return
+         */
         if (isLate(ourTimestamp)) {
             return;
         }
 
+        //添加到自己一侧的buffer中
         addToBuffer(ourBuffer, ourValue, ourTimestamp);
 
+        /**
+         * 去另一侧的buffer中遍历，如果在时间范围内则发送到下游
+         */
         for (Map.Entry<Long, List<BufferEntry<OTHER>>> bucket : otherBuffer.entries()) {
             final long timestamp = bucket.getKey();
 
@@ -250,6 +261,9 @@ public class IntervalJoinOperator<K, T1, T2, OUT>
             }
         }
 
+        /**
+         * 为当前元素注册一个cleanupTime清理时间，cleanupTime=当前元素时间戳+relativeUpperBound
+         */
         long cleanupTime =
                 (relativeUpperBound > 0L) ? ourTimestamp + relativeUpperBound : ourTimestamp;
         if (isLeft) {
